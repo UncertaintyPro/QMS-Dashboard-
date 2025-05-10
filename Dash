@@ -1,0 +1,109 @@
+library(shiny)
+library(ggplot2)
+
+ui <- fluidPage(
+  tags$head(
+    tags$style(HTML("
+      body {
+        background-color: #111111;
+        color: white;
+        font-family: 'Courier New', monospace;
+      }
+      .well, .panel, .form-control {
+        background-color: #111111;
+        color: white;
+        border: 1px solid #00BFC4;
+      }
+      h3, h4 {
+        color: #00BFC4;
+      }
+      .btn {
+        background-color: #00BFC4;
+        color: black;
+        border: none;
+      }
+      input[type='number'] {
+        background-color: #1a1a1a;
+        color: white;
+        border: 1px solid #00BFC4;
+      }
+    "))
+  ),
+  
+  titlePanel("Measurement Capability Dashboard"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      numericInput("uncertainty", "Expanded Uncertainty:", 1),
+      numericInput("target", "Measurement Result:", 0),
+      numericInput("low_limit", "Low Limit:", -5),
+      numericInput("high_limit", "High Limit:", 5),
+      numericInput("cg_resolution", "Gauge Resolution:", 0.01)
+    ),
+    
+    mainPanel(
+      plotOutput("histogram"),
+      tags$hr(),
+      h4("Test Uncertainty Ratio (TUR)"),
+      textOutput("tur_output"),
+      tags$hr(),
+      h4("Resolution of Tolerance"),
+      textOutput("resolution_percentage"),
+      tags$hr(),
+      h4("Quality of Measurement System (QMS)"),
+      textOutput("qmp_calculation"),
+      tags$hr(),
+      p("Simulation: 1000 trials at 95% confidence (K=2)."),
+      p("TUR per ILAC guidelines; QMP and Resolution targets based on VDA 5.")
+    )
+  )
+)
+
+server <- function(input, output) {
+  frequency <- 1000
+  
+  simulated_data <- reactive({
+    rnorm(frequency, mean = input$target, sd = input$uncertainty)
+  })
+  
+  output$histogram <- renderPlot({
+    data <- simulated_data()
+    ggplot(data.frame(Value = data), aes(x = Value)) +
+      geom_histogram(aes(y = ..density..), bins = 50,
+                     fill = "#00BFC4", color = "white", alpha = 0.8) +
+      geom_vline(xintercept = input$low_limit, color = "red", linetype = "dashed", size = 1.2) +
+      geom_vline(xintercept = input$high_limit, color = "red", linetype = "dashed", size = 1.2) +
+      labs(title = "Simulated Measurement Distribution",
+           x = "Measurement Value", y = "Density") +
+      theme_minimal(base_family = "Courier New") +
+      theme(
+        plot.background = element_rect(fill = "#111111", color = NA),
+        panel.background = element_rect(fill = "#111111", color = NA),
+        panel.grid = element_blank(),
+        text = element_text(color = "white"),
+        axis.text = element_text(color = "white"),
+        axis.title = element_text(color = "white"),
+        plot.title = element_text(color = "#00BFC4", size = 18)
+      )
+  })
+  
+  output$tur_output <- renderText({
+    tolerance_width <- input$high_limit - input$low_limit
+    cg_value <- tolerance_width / (2 * input$uncertainty)
+    paste(round(cg_value, 3), ":1")
+  })
+  
+  output$resolution_percentage <- renderText({
+    tol_width <- input$high_limit - input$low_limit
+    re_percent <- (input$cg_resolution / tol_width) * 100
+    paste(round(re_percent, 2), "%")
+  })
+  
+  output$qmp_calculation <- renderText({
+    tol_width <- input$high_limit - input$low_limit
+    qmp <- (2 * input$uncertainty / tol_width) * 100
+    paste(round(qmp, 2), "%")
+  })
+}
+
+shinyApp(ui = ui, server = server)
